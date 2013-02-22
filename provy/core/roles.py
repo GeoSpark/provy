@@ -905,11 +905,11 @@ class Role(object):
                 def provision(self):
                     self.remote_symlink('/home/user/my-app', '/etc/init.d/my-app', sudo=True)
         '''
-        if not self.remote_exists(from_file):
+        if not self.remote_exists(from_file) and not self.remote_exists_dir(from_file):
             raise RuntimeError("The file to create a symlink from (%s) was not found!" % from_file)
 
         command = 'ln -sf %s %s' % (from_file, to_file)
-        if self.remote_exists(to_file):
+        if self.remote_exists(to_file) or self.remote_exists_dir(to_file):
             result = self.execute('ls -la %s' % to_file, stdout=False, sudo=sudo)
             if '->' in result:
                 path = result.split('->')[-1].strip()

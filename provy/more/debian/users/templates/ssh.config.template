@@ -1,0 +1,6 @@
+{% for host in hosts %}
+Host {{ host.pattern }}
+    {% for option in host.options %}
+    {{ option }}
+    {% endfor %}
+{% endfor %}

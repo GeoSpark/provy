@@ -75,8 +75,41 @@ class SSHRole(Role):
         priv_file = self.write_to_temp_file(private_key)
         result_pub = self.update_file(pub_file, pub_path, sudo=True, owner=user)
         result_priv = self.update_file(priv_file, priv_path, sudo=True, owner=user)
+        self.execute('chmod 600 ' + priv_path, user=user)
 
         if result_pub or result_priv:
             self.log("SSH keys generated at server!")
             self.log("Public key:")
             self.log(pub_text)
+
+    def ensure_ssh_config(self, user, hosts):
+        '''
+        Ensures that the specified ssh host options are present on the remote server for the specific user - the global config file isn't affected.
+
+        :param user: User to set SSH configuration options for.
+        :type user: :class:`str`
+        :param hosts: A list of host-pattern and options dictionaries.
+        :type hosts: :class:`list`
+
+        Example:
+        ::
+
+            from provy.core import Role
+            from provy.more.debian import SSHRole
+
+            class MySampleRole(Role):
+                def provision(self):
+                    with self.using(SSHRole) as role:
+                        role.ensure_ssh_config(user='someuser', hosts=[{'pattern': 'example.com', 'options': ['StrictHostKeyChecking no']}])
+
+        '''
+        path = '/home/%s' % user
+        ssh_path = join(path, '.ssh')
+        config_path = join(ssh_path, 'config')
+        config_text = self.render('ssh.config.template', options=hosts)
+        config_file = self.write_to_temp_file(config_text)
+        result_config = self.update_file(config_file, config_path, sudo=True, owner=user)
+        self.execute('chmod 600 ' + config_path, user=user)
+
+        if result_config:
+            self.log('SSH config file generated on server')

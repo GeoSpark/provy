@@ -11,6 +11,7 @@ from provy.core import Role
 from provy.more.debian.package.pip import PipRole
 
 PROGRAMS_KEY = 'supervisor-programs'
+FCGI_PROGRAMS_KEY = 'supervisor-fcgi-programs'
 CONFIG_KEY = 'supervisor-config'
 MUST_UPDATE_CONFIG_KEY = 'must-update-supervisor-config'
 MUST_RESTART_KEY = 'must-restart-supervisor'
@@ -65,6 +66,75 @@ class WithProgram(object):
             'command': self.command,
             'process_name': self.process_name,
             'number_of_processes': self.number_of_processes,
+            'priority': self.priority,
+            'user': self.user,
+            'auto_start': self.auto_start,
+            'auto_restart': self.auto_restart,
+            'start_retries': self.start_retries,
+            'stop_signal': self.stop_signal,
+            'log_folder': self.log_folder,
+            'log_file_max_mb': self.log_file_max_mb,
+            'log_file_backups': self.log_file_backups,
+            'environment': env
+        })
+
+
+class WithFCGIProgram(object):
+    '''
+    This class acts as the context manager for the :meth:`SupervisorRole.with_fcgi_program` method.
+
+    Don't use it directly; Instead, use the :meth:`SupervisorRole.with_fcgi_program` method.
+    '''
+    def __init__(self, supervisor, name):
+        self.supervisor = supervisor
+        self.name = name
+        self.directory = None
+        self.command = None
+
+        self.socket = None
+        self.socket_mode = '0700'
+        self.socket_owner = None
+
+        self.process_name = name + '-%(process_num)s'
+        self.number_of_processes = 1
+        self.priority = 100
+        self.user = self.supervisor.context['owner']
+
+        self.auto_start = True
+        self.auto_restart = True
+        self.start_retries = 3
+        self.stop_signal = 'TERM'
+
+        self.log_folder = '/var/log'
+        self.log_file_max_mb = 1
+        self.log_file_backups = 10
+
+        self.environment = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if not self.directory or not self.command or not self.socket:
+            raise RuntimeError('[Supervisor] Directory, command, and socket properties must be specified for fcgi-program %s' % self.name)
+
+        if FCGI_PROGRAMS_KEY not in self.supervisor.context:
+            self.supervisor.context[FCGI_PROGRAMS_KEY] = []
+
+        env = []
+        for key, value in self.environment.iteritems():
+            env.append('%s="%s"' % (key, value))
+        env = ",".join(env)
+
+        self.supervisor.context[FCGI_PROGRAMS_KEY].append({
+            'name': self.name,
+            'directory': self.directory,
+            'command': self.command,
+            'process_name': self.process_name,
+            'number_of_processes': self.number_of_processes,
+            'socket': self.socket,
+            'socket_mode': self.socket_mode,
+            'socket_owner': self.socket_owner,
             'priority': self.priority,
             'user': self.user,
             'auto_start': self.auto_start,
@@ -263,6 +333,31 @@ class SupervisorRole(Role):
         '''
         return WithProgram(self, name)
 
+    def with_fcgi_program(self, name):
+        '''
+        Enters a with block with a :data:`fcgi-program` variable that allows you to configure a fcgi_program entry in supervisord.conf.
+
+        :param name: Name of the FastCGI program being supervised.
+        :type name: :class:`str`
+
+        Example:
+        ::
+
+            from provy.core import Role
+            from provy.more.debian import SupervisorRole
+
+            class MySampleRole(Role):
+                def provision(self):
+                    with self.using(SupervisorRole) as role:
+                        with role.with_fcgi_program('website') as program:
+                            program.directory = '/home/backend/provy/tests/functional'
+                            program.command = 'python website.py 800%(process_num)s'
+                            program.socket = 'unix:///tmp/functional.sock'
+                            program.number_of_processes = 4
+                            program.log_folder = '/home/backend/logs'
+        '''
+        return WithFCGIProgram(self, name)
+
     def update_config_file(self):
         '''
         Updates the config file to match the configurations done under the :meth:`config` method.
@@ -280,7 +375,7 @@ class SupervisorRole(Role):
                     with self.using(SupervisorRole) as role:
                         role.update_config_file()
         '''
-        if CONFIG_KEY in self.context or PROGRAMS_KEY in self.context:
+        if CONFIG_KEY in self.context or PROGRAMS_KEY in self.context or FCGI_PROGRAMS_KEY in self.context:
             if CONFIG_KEY not in self.context:
                 self.config()
 
@@ -291,6 +386,9 @@ class SupervisorRole(Role):
 
             if PROGRAMS_KEY in self.context:
                 options['programs'] = self.context[PROGRAMS_KEY]
+
+            if FCGI_PROGRAMS_KEY in self.context:
+                options['fcgi_programs'] = self.context[FCGI_PROGRAMS_KEY]
 
             result = self.update_file('supervisord.conf.template', conf_path, options=options, owner=self.context['owner'], sudo=True)
 

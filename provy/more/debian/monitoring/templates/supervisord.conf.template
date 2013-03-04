@@ -46,3 +46,36 @@ stderr_logfile_backups={{ program.log_file_backups }}
 environment={{ program.environment }}
 {% endif %}
 {% endfor %}
+
+{% for program in fcgi_programs %}
+[fcgi-program:{{ program.name }}]
+command={{ program.command }}
+process_name={{ program.name }}{% if program.number_of_processes > 1 %}_%(process_num)s{% endif %}
+numprocs={{ program.number_of_processes }}
+directory={{ program.directory }}
+socket={{ program.socket }}
+socket_mode={{ program.socket_mode }}
+socket_owner={{ program.socket_owner }}
+{% if program.priority %}
+priority={{ program.priority }}
+{% endif %}
+autostart={{ program.auto_start | lower }}
+autorestart={{ program.auto_restart | lower }}
+startretries={{ program.start_retries }}
+stopsignal={{ program.stop_signal }}
+{% if program.user %}
+user={{ program.user }}
+{% endif %}
+redirect_stderr=false
+stdout_logfile={{ program.log_folder}}/{{ program.name }}.stdout.%(process_num)s.log
+stdout_logfile_maxbytes={{ program.log_file_max_mb }}MB
+stdout_logfile_backups={{ program.log_file_backups }}
+stderr_logfile={{ program.log_folder}}/{{ program.name }}.stderr.%(process_num)s.log
+stderr_logfile_maxbytes={{ program.log_file_max_mb }}MB
+stderr_logfile_backups={{ program.log_file_backups }}
+
+{% if program.environment %}
+environment={{ program.environment }}
+{% endif %}
+{% endfor %}
+
